@@ -1,44 +1,36 @@
-import express from "express";
-import dotenv from "dotenv";
-import axios from "axios";
-
-dotenv.config();
+const express = require('express');
+const cors = require('cors');
+const axios = require('axios');
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  const loginUrl = `${process.env.OMADA_OAUTH_URL}?client_id=${process.env.OMADA_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.OMADA_REDIRECT_URI)}&response_type=code&scope=omada.cloud.access`;
-  res.send(`<a href="${loginUrl}">Iniciar sesión con Omada</a>`);
-});
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.get("/auth/callback", async (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.status(400).send("No se recibió el código de autorización");
-
+app.post('/omada/auth', async (req, res) => {
   try {
-    const response = await axios.post(process.env.OMADA_TOKEN_URL, {
-      clientId: process.env.OMADA_CLIENT_ID,
-      clientSecret: process.env.OMADA_CLIENT_SECRET,
-      code,
-      grantType: "authorization_code",
-      redirectUri: process.env.OMADA_REDIRECT_URI,
-      omadaId: process.env.OMADA_ID
-    });
+    const {
+      clientMac,
+      clientIp,
+      site,
+      vid,
+      t,
+      gatewayMac,
+      redirectUrl
+    } = req.body;
 
-    res.json({
-      access_token: response.data.accessToken,
-      refresh_token: response.data.refreshToken,
-      expires_in: response.data.expiresIn
-    });
-  } catch (error) {
-    console.error("Error al obtener token:", error.response?.data || error.message);
-    res.status(500).json({
-      error: "Error al obtener token",
-      details: error.response?.data || error.message
-    });
+    const authUrl = `http://190.34.133.54/portal/radius/auth?clientMac=${clientMac}&clientIp=${clientIp}&t=${t}&site=${site}&redirectUrl=${encodeURIComponent(redirectUrl)}&gatewayMac=${gatewayMac}&vid=${vid}`;
+
+    const response = await axios.post(authUrl);
+
+    res.status(response.status).send(response.data);
+  } catch (err) {
+    console.error('Error al contactar Omada:', err.message);
+    res.status(500).send('Error al autenticar con el router.');
   }
 });
 
-app.listen(port, () => {
-  console.log(`Servidor Omada OAuth corriendo en puerto ${port}`);
+app.listen(PORT, () => {
+  console.log(`Servidor proxy en http://localhost:${PORT}`);
 });
